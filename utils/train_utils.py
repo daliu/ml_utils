@@ -9,11 +9,13 @@ from sklearn.ensemble import RandomForestClassifier
 from scipy.stats import randint as sp_randint
 from scipy.stats import uniform as sp_float
 
-from app.models.prioritizer import (prioritizer_constants as pri_constants,
-                                    train_constants,
-                                    standardize)
-from app.utils import metrics_utils
-from app.log import logger
+from civismlext.hyperband import HyperbandSearchCV
+
+from ml_utils.utils import (prioritizer_constants as model_constants,
+                            path_constants,
+                            standardize)
+
+from ml_utils.utils import metrics_utils
 
 
 # Save model
@@ -29,7 +31,7 @@ def save_model(model, model_write_path):
 
 def tune_model(X_features, Y_labels, model_name,
                param_grid={},
-               feat_names_save_path=pri_constants.FEAT_NAMES_PATH,
+               feat_names_save_path=model_constants.FEAT_NAMES_PATH,
                cv_folds=5,
                save=False):
     """
@@ -104,23 +106,21 @@ def tune_model(X_features, Y_labels, model_name,
         clf = RandomForestClassifier(n_jobs=-1)
         clf.set_params(**param_grid)
 
-    logger.debug("Now fitting model with params {}".format(param_grid))
+    print("Now fitting model with params {}".format(param_grid))
 
-    # # # # Comment this block out for production, because of Hyperband library
-    # if param_grid:
-    #     # Only tune if we actually have params to tune.
-    #     from civismlext.hyperband import HyperbandSearchCV
-    #     tuned_model = HyperbandSearchCV(clf,
-    #                                     param_distributions=param_grid,
-    #                                     cost_parameter_max={'n_estimators':
-    #                                                         upper_limit},
-    #                                     cost_parameter_min={'n_estimators': 10},
-    #                                     scoring='roc_auc',
-    #                                     n_jobs=4,
-    #                                     cv=cv_folds)
-    # else:
-    #     # Skip tuning
-    #     tuned_model = clf
+    if param_grid:
+        # Only tune if we actually have params to tune.
+        tuned_model = HyperbandSearchCV(clf,
+                                        param_distributions=param_grid,
+                                        cost_parameter_max={'n_estimators':
+                                                            upper_limit},
+                                        cost_parameter_min={'n_estimators': 10},
+                                        scoring='roc_auc',
+                                        n_jobs=4,
+                                        cv=cv_folds)
+    else:
+        # Skip tuning
+        tuned_model = clf
 
     # Comment this code in for running local tests
     tuned_model = clf
@@ -133,7 +133,7 @@ def tune_model(X_features, Y_labels, model_name,
     # Need to use .values to convert to numpy matrices
     tuned_model.fit(X_features.values, Y_labels.values)
 
-    logger.debug("Model fitted.")
+    print("Model fitted.")
     return tuned_model
 
 
@@ -171,7 +171,7 @@ def split_labeled_df(labeled_df,
     if test_size == 0:
         return train_data, train_data, labels, labels
 
-    logger.debug("Performing split with random_state {}".format(random_state))
+    print("Performing split with random_state {}".format(random_state))
 
     x_train, x_test, y_train, y_test = train_test_split(train_data,
                                                         labels,
@@ -180,38 +180,38 @@ def split_labeled_df(labeled_df,
                                                         random_state=random_state)
 
     # Write x,y (train/test)
-    x_train.to_pickle(write_path + train_constants.X_TRAIN_FILE_PATH)
-    x_test.to_pickle(write_path + train_constants.X_TEST_FILE_PATH)
+    x_train.to_pickle(write_path + path_constants.X_TRAIN_FILE_PATH)
+    x_test.to_pickle(write_path + path_constants.X_TEST_FILE_PATH)
 
     # Pandas Series before v24 defaulted to False
-    y_train.to_pickle(write_path + train_constants.Y_TRAIN_FILE_PATH)
-    y_test.to_pickle(write_path + train_constants.Y_TEST_FILE_PATH)
+    y_train.to_pickle(write_path + path_constants.Y_TRAIN_FILE_PATH)
+    y_test.to_pickle(write_path + path_constants.Y_TEST_FILE_PATH)
 
     return x_train, x_test, y_train, y_test
 
 
 # Try running and see if results produced
 def get_fitted_model(overwrite_existing_files=False,
-                     person_messages_filepath=pri_constants.MSGS_READ_PATH,
-                     pkl_person_msg_filepath=pri_constants.PKL_MSGS_READ_PATH,
-                     feat_names_save_path=pri_constants.FEAT_NAMES_PATH,
-                     unlabeled_train_df_fpath=pri_constants.UNLABELED_TRAIN_DF_PATH,
-                     labels_filepath=pri_constants.LABELS_FILEPATH,
-                     labeled_df_filepath=pri_constants.LABELED_TRAIN_DF_PATH,
-                     id_col_name=pri_constants.ID_COL_NAME,
-                     label_name=pri_constants.LABEL_COL_NAME,
-                     default_feature_val=pri_constants.DEFAULT_FEATURE_VAL,
-                     unique_feats_threshold=pri_constants.UNIQUE_VALS,
+                     person_messages_filepath=model_constants.MSGS_READ_PATH,
+                     pkl_person_msg_filepath=model_constants.PKL_MSGS_READ_PATH,
+                     feat_names_save_path=model_constants.FEAT_NAMES_PATH,
+                     unlabeled_train_df_fpath=model_constants.UNLABELED_TRAIN_DF_PATH,
+                     labels_filepath=model_constants.LABELS_FILEPATH,
+                     labeled_df_filepath=model_constants.LABELED_TRAIN_DF_PATH,
+                     id_col_name=model_constants.ID_COL_NAME,
+                     label_name=model_constants.LABEL_COL_NAME,
+                     default_feature_val=model_constants.DEFAULT_FEATURE_VAL,
+                     unique_feats_threshold=model_constants.UNIQUE_VALS,
                      split_write_path="tests/",
-                     test_split_size=pri_constants.TEST_SPLIT_SIZE,
-                     random_state=pri_constants.RANDOM_STATE,
-                     param_grid=pri_constants.RF_PARAM_GRID,
-                     model_name=pri_constants.MODEL_NAME,
-                     model_filepath=pri_constants.MODEL_FILEPATH,
-                     train_metrics_savepath=pri_constants.TRAIN_METRICS_FILEPATH,
-                     validate_metrics_savepath=pri_constants.VALIDATE_METRICS_FILEPATH,
+                     test_split_size=model_constants.TEST_SPLIT_SIZE,
+                     random_state=model_constants.RANDOM_STATE,
+                     param_grid=model_constants.RF_PARAM_GRID,
+                     model_name=model_constants.MODEL_NAME,
+                     model_filepath=model_constants.MODEL_FILEPATH,
+                     train_metrics_savepath=model_constants.TRAIN_METRICS_FILEPATH,
+                     validate_metrics_savepath=model_constants.VALIDATE_METRICS_FILEPATH,
                      is_training_data=True,
-                     cv_folds=pri_constants.CV_FOLDS):
+                     cv_folds=model_constants.CV_FOLDS):
     """
     Either get a pre-trained model from serialized file, or read-in, label, and train from scratch.
 
